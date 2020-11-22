@@ -14,36 +14,47 @@ function main() {
   // forecast_dateを得る
   var forecast_date = values[1][19]; // 一番上の行から適当に
   
-  // 本日の日付をyyyy-mm-ddで取得
-  var today = formatDate(new Date());
+  // 前回更新時のforecast_dateを得る
+  var forecast_date_old = SpreadsheetApp.getActiveSheet().getRange(2, 20).getValue();
+  forecast_date_old = formatDate(forecast_date_old);
   
-  // 県名と日付から感染者数を得る
-  var confirmed = getConfirmedNum(values, "東京都", today);
-  console.log(confirmed);
+  if (forecast_date != forecast_date_old) {
+    // 更新されてるのでTwitter投稿&シート更新
+    // 本日の日付をyyyy-mm-ddで取得
+    var today = formatDate(new Date());
   
-  // twitter投稿
-  var service  = twitter.getService();
-  var status = "本日の新型コロナウイルス(COVID-19)感染者予報です。(" + today + ")" + "\n" +
-                "\n" +
-                "#東京都 "   + getConfirmedNum(values, "東京都", today) + "人" + "\n" +
-                "#神奈川県 " + getConfirmedNum(values, "神奈川県", today) + "人" + "\n" +                
-                "#北海道 "   + getConfirmedNum(values, "北海道", today) + "人" + "\n" +
-                "#愛知県 "   + getConfirmedNum(values, "愛知県", today) + "人" + "\n" +
-                "#長野県 "   + getConfirmedNum(values, "長野県", today) + "人" + "\n" +
-                "#山口県 "   + getConfirmedNum(values, "山口県", today) + "人" + "\n" +
-                "\n" +
-                "(データ引用元:Google、予報発表日" + forecast_date + ")" + "\n" +
-                "#新型コロナウイルス #COVID19";
-  var response = service.fetch('https://api.twitter.com/1.1/statuses/update.json', {
-    method: 'post',
-    payload: { status: status}
-  });
+    // twitter投稿
+    var service  = twitter.getService();
+    var status = "Google AIによる本日のコロナ感染予報です。(" + today + ")" + "\n" +
+                 "\n" +
+                 "#東京都 "   + getConfirmedByPref(values, "東京都", today) + "人" + "\n" +
+                 "#神奈川県 " + getConfirmedByPref(values, "神奈川県", today) + "人" + "\n" +                
+                 "#北海道 "   + getConfirmedByPref(values, "北海道", today) + "人" + "\n" +
+                 "#愛知県 "   + getConfirmedByPref(values, "愛知県", today) + "人" + "\n" +
+                 "#大阪府 "   + getConfirmedByPref(values, "大阪府", today) + "人" + "\n" +
+                 "#長野県 "   + getConfirmedByPref(values, "長野県", today) + "人" + "\n" +
+                 "#山口県 "   + getConfirmedByPref(values, "山口県", today) + "人" + "\n" +
+                 "日本全国: " + getConfirmedTotal(values, today) + "人" + "\n" +
+                 "\n" +
+                 "(予報発表日: " + forecast_date + ")" + "\n" +
+                 "引用元: " + "https://datastudio.google.com/reporting/8224d512-a76e-4d38-91c1-935ba119eb8f/page/ncZpB" + "\n" +
+                 "#新型コロナウイルス #COVID19";
+    //var status_length = status.length;
+    var response = service.fetch('https://api.twitter.com/1.1/statuses/update.json', {
+      method: 'post',
+      payload: { status: status }
+    });
   
-  // シートに反映しとく
-  SpreadsheetApp.getActiveSheet().getRange(1, 1, values.length, values[0].length).setValues(values);
+    // シートに反映しとく
+    SpreadsheetApp.getActiveSheet().getRange(1, 1, values.length, values[0].length).setValues(values);
+    
+  } else {
+    // 更新されてないのでログに出力するだけ
+    console.log("don't update because of stable forecast_date: " + forecast_date);
+  }
 }
 
-function getConfirmedNum (values, pref, date) {
+function getConfirmedByPref (values, pref, date) {
   // 24列目が県名と一致する行すべて取得
   var values_pref = values.filter(function(row) {
     return (row[24] == pref)
@@ -59,6 +70,23 @@ function getConfirmedNum (values, pref, date) {
   console.log(confirmed);
   
   return confirmed;
+}
+
+function getConfirmedTotal(values, date) {
+  // 日付が一致する行すべて選択
+  var values_date = values.filter(function(row) {
+    return (row[2] == date)
+  });
+  
+  // 得られた配列の21列目を合計
+  var confirmed_total = 0;
+  values_date.map(function(row) {
+    confirmed_total = confirmed_total + Number(row[21]); // 感染者数はString扱いなのでNumberにキャスト
+  });
+  
+  confirmed_total = Math.round(confirmed_total);
+  
+  return confirmed_total;
 }
 
 function formatDate(dt) {
