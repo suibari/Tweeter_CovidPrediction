@@ -1,5 +1,6 @@
 function main() {
   var CSV_DOWNLOAD_URL = "https://storage.googleapis.com/covid-external/forecast_JAPAN_PREFECTURE_28.csv";
+  var service  = twitter.getService();
   
   // CSVファイル取得
   options = {
@@ -18,32 +19,36 @@ function main() {
   var forecast_date_old = SpreadsheetApp.getActiveSheet().getRange(2, 20).getValue();
   forecast_date_old = formatDate(forecast_date_old);
   
+  // 本日の日付をyyyy-mm-ddで取得
+  var date  = new Date()
+  var today = formatDate(date);
+  var date_aft2w = new Date(date.setDate(date.getDate() + 14));
+  var aft2w      = formatDate(date_aft2w);
+  
+  //if (1) {
   if (forecast_date != forecast_date_old) {
     // 更新されてるのでTwitter投稿&シート更新
-    // 本日の日付をyyyy-mm-ddで取得
-    var today = formatDate(new Date());
   
-    // twitter投稿
-    var service  = twitter.getService();
-    var status = "Google AIによる本日のコロナ感染予報です。(" + today + ")" + "\n" +
+    // twitter投稿(感染者予報)
+    var status = "💊コロナ感染予報byGoogleAI(" + today + ")" + "\n" +
+                 "#東京都 "   + getConfirmedByPref(values, "東京都", today)  + "/" + getConfirmedByPref(values, "東京都", aft2w)+ "/"   + "+" + getConfirmedDensity(values, "東京都", today)   + "\n" +
+                 "#神奈川県 " + getConfirmedByPref(values, "神奈川県", today) + "/" + getConfirmedByPref(values, "神奈川県", aft2w)+ "/" + "+" + getConfirmedDensity(values, "神奈川県", today) + "\n" +                
+                 "#北海道 "   + getConfirmedByPref(values, "北海道", today)  + "/" + getConfirmedByPref(values, "北海道", aft2w)+ "/"   + "+" + getConfirmedDensity(values, "北海道", today)   + "\n" +
+                 "#愛知県 "   + getConfirmedByPref(values, "愛知県", today)  + "/" + getConfirmedByPref(values, "愛知県", aft2w)+ "/"   + "+" + getConfirmedDensity(values, "愛知県", today)   + "\n" +
+                 //"#大阪府 "   + getConfirmedByPref(values, "大阪府", today)  + "/" + getConfirmedByPref(values, "大阪府", aft2w)+ "/"   + "+" + getConfirmedDensity(values, "大阪府", today)   + "\n" +
+                 "#長野県 "   + getConfirmedByPref(values, "長野県", today)  + "/" + getConfirmedByPref(values, "長野県", aft2w)+ "/"   + "+" + getConfirmedDensity(values, "長野県", today)   + "\n" +
+                 "#山口県 "   + getConfirmedByPref(values, "山口県", today)  + "/" + getConfirmedByPref(values, "山口県", aft2w)+ "/"   + "+" + getConfirmedDensity(values, "山口県", today)   + "\n" +
+                 "日本全国: " + getConfirmedTotal(values, today) + "人/" + getConfirmedTotal(values, aft2w) + "人" + "\n" +
+                 "(本日/2w後/感染密度[%/km^2])" + "\n" +
                  "\n" +
-                 "#東京都 "   + getConfirmedByPref(values, "東京都", today) + "人" + "\n" +
-                 "#神奈川県 " + getConfirmedByPref(values, "神奈川県", today) + "人" + "\n" +                
-                 "#北海道 "   + getConfirmedByPref(values, "北海道", today) + "人" + "\n" +
-                 "#愛知県 "   + getConfirmedByPref(values, "愛知県", today) + "人" + "\n" +
-                 "#大阪府 "   + getConfirmedByPref(values, "大阪府", today) + "人" + "\n" +
-                 "#長野県 "   + getConfirmedByPref(values, "長野県", today) + "人" + "\n" +
-                 "#山口県 "   + getConfirmedByPref(values, "山口県", today) + "人" + "\n" +
-                 "日本全国: " + getConfirmedTotal(values, today) + "人" + "\n" +
-                 "\n" +
-                 "(予報発表日: " + forecast_date + ")" + "\n" +
-                 "引用元: " + "https://datastudio.google.com/reporting/8224d512-a76e-4d38-91c1-935ba119eb8f/page/ncZpB" + "\n" +
-                 "#新型コロナウイルス #COVID19";
-    //var status_length = status.length;
+                 "予報発表日: " + forecast_date + "\n" +
+                 //"引用元: " + "https://datastudio.google.com/reporting/8224d512-a76e-4d38-91c1-935ba119eb8f/page/ncZpB" + "\n" +
+                 "#COVID19";
     var response = service.fetch('https://api.twitter.com/1.1/statuses/update.json', {
       method: 'post',
       payload: { status: status }
     });
+    Logger.log(response);
   
     // シートに反映しとく
     SpreadsheetApp.getActiveSheet().getRange(1, 1, values.length, values[0].length).setValues(values);
@@ -87,6 +92,35 @@ function getConfirmedTotal(values, date) {
   confirmed_total = Math.round(confirmed_total);
   
   return confirmed_total;
+}
+
+function getConfirmedDensity(value, pref, date) {
+  // 人口密度: 引用元はhttps://uub.jp/rnk/p_j.html
+  var pop_den_tokyo     = 6367.67;
+  var pop_den_kanagawa  = 3813.30;
+  var pop_den_osaka     = 4627.76;
+  var pop_den_hokkaido  = 66.47;
+  var pop_den_aichi     = 1457.77;
+  var pop_den_nagano    = 149.99;
+  var pop_den_yamaguchi = 219.47;
+  
+  var confirmed = getConfirmedByPref(value, pref, date);
+  if (pref == "東京都") {
+    var confirmed_density = confirmed / pop_den_tokyo;
+  } else if (pref == "神奈川県") {
+    var confirmed_density = confirmed / pop_den_kanagawa;
+  } else if (pref == "大阪府") {
+    var confirmed_density = confirmed / pop_den_osaka;
+  } else if (pref == "北海道") {
+    var confirmed_density = confirmed / pop_den_hokkaido;
+  } else if (pref == "愛知県") {
+    var confirmed_density = confirmed / pop_den_aichi;
+  } else if (pref == "長野県") {
+    var confirmed_density = confirmed / pop_den_nagano;
+  } else if (pref == "山口県") {
+    var confirmed_density = confirmed / pop_den_yamaguchi;
+  }
+  return 100 * Math.round(confirmed_density*1000)/1000;
 }
 
 function formatDate(dt) {
